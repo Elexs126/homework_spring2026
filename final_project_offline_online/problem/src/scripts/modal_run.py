@@ -1,19 +1,20 @@
-import sys
+import time
+import argparse
 from pathlib import Path
 
 import modal
 
-from scripts.run_dqn import main
+from scripts.train_offline_online import main, setup_arguments
 
 
-APP_NAME = "hw3-ql"
+APP_NAME = "offline-to-online-project"
 NETRC_PATH = Path("~/.netrc").expanduser()
 PROJECT_DIR = "/root/project"
-VOLUME_PATH = "/root/vol"
+VOLUME_PATH = "/root/exp"
 DEFAULT_GPU = "T4"
 DEFAULT_CPU = 2.0
 DEFAULT_MEMORY = 4096  # MB
-volume = modal.Volume.from_name("hw3-ql-volume", create_if_missing=True)
+volume = modal.Volume.from_name("offline-to-online-project-volume", create_if_missing=True)
 
 
 def load_gitignore_patterns() -> list[str]:
@@ -27,8 +28,7 @@ def load_gitignore_patterns() -> list[str]:
     if not gitignore_path.is_file():
         return []
 
-    # Always exclude exp/ directory (logs should only go to the Modal volume)
-    patterns: list[str] = ["**/exp/**"]
+    patterns: list[str] = []
     for line in gitignore_path.read_text(encoding="utf-8").splitlines():
         entry = line.strip()
         if not entry or entry.startswith("#") or entry.startswith("!"):
@@ -43,7 +43,9 @@ def load_gitignore_patterns() -> list[str]:
 
 
 # Build a container image with the project's dependencies using uv.
-image = modal.Image.debian_slim().apt_install("libgl1", "libglib2.0-0", "swig").uv_sync()
+image = modal.Image.debian_slim().apt_install("libgl1", "libglib2.0-0").uv_sync()
+# Download OGBench datasets.
+image = image.run_commands("python -c \"import ogbench;ogbench.download_datasets(['cube-single-play-v0', 'cube-double-play-v0','antsoccer-arena-navigate-v0'])\"")
 # Copy .netrc for wandb logging.
 if NETRC_PATH.is_file():
     image = image.add_local_file(
@@ -64,22 +66,14 @@ env = {
 }
 
 
-@app.function(volumes={VOLUME_PATH: volume}, timeout=60 * 60 * 5, env=env, image=image, gpu=DEFAULT_GPU, cpu=DEFAULT_CPU, memory=DEFAULT_MEMORY)
-def hw3_dqn_remote(*args: str) -> None:
-    import os
-
-    os.chdir(PROJECT_DIR)
-    exp_vol = Path(VOLUME_PATH) / "exp"
-    exp_vol.mkdir(parents=True, exist_ok=True)
-
-    exp_link = Path(PROJECT_DIR) / "exp"
-    if exp_link.is_dir() and not exp_link.is_symlink():
-        import shutil
-        shutil.rmtree(exp_link)
-    elif exp_link.exists() or exp_link.is_symlink():
-        exp_link.unlink()
-    exp_link.symlink_to(exp_vol)
-
-    sys.argv = ["run_dqn.py"] + list(args)
-    main()
+@app.function(volumes={VOLUME_PATH: volume}, timeout=60 * 60 * 12, env=env, image=image, gpu=DEFAULT_GPU, cpu=DEFAULT_CPU, memory=DEFAULT_MEMORY)
+def offline_to_online_modal_remote(*args: str) -> None:
+    args = setup_arguments(args)
+    if args.njobs is not None and len(args.job_specs) > 0:
+        # Run n jobs in parallel
+        from scripts.run_njobs import main_njobs
+        main_njobs(job_specs=args.job_specs, njobs=args.njobs)
+    else:
+        # Run a single job
+        main(args)
     volume.commit()
