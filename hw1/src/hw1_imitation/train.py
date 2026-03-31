@@ -37,9 +37,10 @@ class TrainConfig:
     # The action chunk size.
     chunk_size: int = 8
 
-    batch_size: int = 128
-    lr: float = 3e-4
+    batch_size: int = 512
+    lr: float = 1.2e-3
     weight_decay: float = 0.0
+    warmup_epochs: int = 10
     hidden_dims: tuple[int, ...] = (256, 256, 256)
     # The number of epochs to train for.
     num_epochs: int = 400
@@ -127,7 +128,77 @@ def run_training(config: TrainConfig) -> None:
     )
     logger = Logger(log_dir)
 
-    ### TODO: PUT YOUR MAIN TRAINING LOOP HERE ###
+    # 1. 定义优化器：负责根据 Loss 更新模型的参数
+    # 使用 Adam 优化器，它是深度学习中最通用的“自动驾驶”优化器
+    optimizer = torch.optim.Adam(
+        model.parameters(), 
+        lr=config.lr, 
+        weight_decay=config.weight_decay
+    )
+    
+    def lr_lambda(current_epoch):
+        if current_epoch < config.warmup_epochs:
+            # 在预热期内，学习率从极小值线性增加到 config.lr
+            return float(current_epoch) / float(max(1, config.warmup_epochs))
+        # 预热结束后保持 config.lr (或者你也可以在这里加后续的 Decay)
+        return 1.0
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    # -----------------------------
+    global_step = 0
+    # 开始漫长的训练季节 (Epochs)
+    for epoch in range(config.num_epochs):
+        model.train()  # 开启训练模式
+        epoch_losses = []
+
+        # 2. 从流水线 (DataLoader) 拿出一批批数据
+        for batch in loader:
+            # --- 把列表里的东西按顺序掏出来 ---
+            state, action = batch
+            
+            # 搬运工：把数据从 CPU 搬到显卡 GPU 上
+            state = state.to(device)
+            action = action.to(device)
+
+            # --- 核心三步走 ---
+            # (1) 算分：调用你刚才在 model.py 写的 compute_loss
+            loss = model.compute_loss(state, action)
+
+            # (2) 清空：擦掉上一次留下的梯度残余
+            optimizer.zero_grad()
+
+            # (3) 进化：反向传播计算梯度，并更新参数
+            loss.backward()
+            optimizer.step()
+            # ----------------
+
+            epoch_losses.append(loss.item())
+            global_step += 1
+
+            # 定期向 WandB 汇报进度
+            if global_step % config.log_interval == 0:
+                wandb.log({"train/loss": loss.item(), "epoch": epoch}, step=global_step)
+        scheduler.step()  # 更新学习率
+        current_lr = optimizer.param_groups[0]['lr']
+        wandb.log({"train/learning_rate": current_lr, "epoch": epoch}, step=global_step)
+
+        # 3. 定期“大考”：运行评估脚本看看机器人推得怎么样
+        if epoch % 50 == 0 or epoch == config.num_epochs - 1:
+            print(f"Epoch {epoch}: Mean Loss = {np.mean(epoch_losses):.4f}")
+            # 调用框架自带的评估函数，这会生成推 T 型块的视频
+            from hw1_imitation.evaluation import evaluate_policy
+            evaluate_policy(
+                model=model,                       # 你的模型大脑
+                normalizer=normalizer,             # 在 line 94 定义的标准化器
+                device=device,                     # 计算设备
+                chunk_size=config.chunk_size,      # 动作块大小
+                video_size=config.video_size,      # 视频尺寸 (从 config 拿)
+                num_video_episodes=config.num_video_episodes, # 测试集数
+                flow_num_steps=config.flow_num_steps, # 流匹配步数
+                step=global_step,                  # 当前训练到了第几步
+                logger=logger                      # 在 line 124 定义的日志器
+            )
+            
 
     logger.dump_for_grading()
 
