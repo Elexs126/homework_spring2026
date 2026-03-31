@@ -28,7 +28,7 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# --- GPU 固定配置 (CUDA 12.6) ---
+# --- GPU Configuration (CUDA 12.6) ---
 
 [[tool.uv.index]]
 name = "pytorch-gpu"
