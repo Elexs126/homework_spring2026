@@ -40,7 +40,7 @@ python -m pip install -U uv
 ## 4) 运行一键脚本（安装 + 打补丁 + 快速验收）
 
 ```bash
-bash homework_spring2026/scripts/setup_unified_env_ubuntu_miniconda.sh
+bash scripts/setup_unified_env_ubuntu_miniconda.sh
 ```
 
 脚本会：
@@ -55,9 +55,10 @@ HW3 的 `experiments/dqn/mspacman.yaml` 需要 Atari 依赖和 ROM。
 
 ```bash
 export PY="$CONDA_PREFIX/bin/python"
-export UV_HTTP_TIMEOUT=600
 
-uv pip install --python "$PY" "gym[atari,accept-rom-license]==0.25.2"
+# Python 3.11 下，gym[atari]==0.25.2 的 ale-py 旧版本 extra 解析会失败；
+# 这里显式安装与 Gym 0.25 兼容的 ale-py + AutoROM。
+"$PY" -m pip install "ale-py==0.8.1" "autorom[accept-rom-license]"
 
 # 下载并安装 ROM（AutoROM 在上一步会被安装）
 AutoROM --accept-license

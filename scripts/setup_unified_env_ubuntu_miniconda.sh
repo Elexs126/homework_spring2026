@@ -10,7 +10,7 @@ if [[ -z "${CONDA_PREFIX:-}" ]]; then
   exit 1
 fi
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="$CONDA_PREFIX/bin/python"
 
 export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
@@ -27,8 +27,8 @@ fi
 # 1) Base install from HW1 lock (includes GPU torch index/source via pyproject + uv.lock)
 echo "[step] uv sync (hw1) -> active conda env"
 (
-  cd "$REPO_ROOT/homework_spring2026/hw1"
-  uv sync --active --frozen --inexact --refresh-package torch
+  cd "$REPO_ROOT/hw1"
+  UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX" uv sync --frozen --inexact --refresh-package torch
 )
 
 # 2) Union of cross-homework deps (pinned to the set validated in the unified env)
@@ -48,11 +48,12 @@ uv pip install --python "$PY" \
   "matplotlib==3.10.8" \
   "gradescope-utils==0.5.0" \
   "opencv-python==4.11.0.86" \
+  "pygame==2.6.1" \
   "box2d==2.3.10"
 
 # 3) Patch Gym MuJoCo assets (Hopper/Walker2d) for mujoco>=3.x compatibility.
 echo "[step] patch gym mujoco assets"
-"$PY" "$REPO_ROOT/homework_spring2026/scripts/patch_gym_mujoco_global_coords.py"
+"$PY" "$REPO_ROOT/scripts/patch_gym_mujoco_global_coords.py"
 
 # 4) Quick sanity checks (no heavy training runs)
 echo "[check] torch cuda"
@@ -72,30 +73,30 @@ echo "[check] ogbench import"
 echo "[check] entrypoints --help"
 # Avoid writing __pycache__ during checks
 export PYTHONDONTWRITEBYTECODE=1
-"$PY" "$REPO_ROOT/homework_spring2026/hw1/src/hw1_imitation/train.py" --help >/dev/null
+"$PY" "$REPO_ROOT/hw1/src/hw1_imitation/train.py" --help >/dev/null
 (
-  cd "$REPO_ROOT/homework_spring2026/hw2"
+  cd "$REPO_ROOT/hw2"
   PYTHONPATH=src "$PY" src/scripts/run.py --help >/dev/null
 )
 (
-  cd "$REPO_ROOT/homework_spring2026/hw3"
+  cd "$REPO_ROOT/hw3"
   PYTHONPATH=src "$PY" src/scripts/run_dqn.py --help >/dev/null
   PYTHONPATH=src "$PY" src/scripts/run_sac.py --help >/dev/null
 )
 (
-  cd "$REPO_ROOT/homework_spring2026/hw4"
+  cd "$REPO_ROOT/hw4"
   "$PY" -m hw4.train --help >/dev/null
 )
 (
-  cd "$REPO_ROOT/homework_spring2026/hw5"
+  cd "$REPO_ROOT/hw5"
   PYTHONPATH=src "$PY" src/scripts/run.py --help >/dev/null
 )
 (
-  cd "$REPO_ROOT/homework_spring2026/final_project_offline_online/problem"
+  cd "$REPO_ROOT/final_project_offline_online/problem"
   PYTHONPATH=src "$PY" src/scripts/run.py --help >/dev/null
 )
 (
-  cd "$REPO_ROOT/homework_spring2026/final_project_llm_rl"
+  cd "$REPO_ROOT/final_project_llm_rl"
   "$PY" -m llm_rl_final_proj.train --help >/dev/null
   "$PY" -m llm_rl_final_proj.reward_model.train --help >/dev/null
   "$PY" -m llm_rl_final_proj.online.train_rm_grpo --help >/dev/null
