@@ -1,0 +1,19 @@
+# Normalize text files while letting Git handle OS-specific checkout behavior.
+* text=auto
+
+# Common binary assets should never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.pt binary
+*.pth binary
+*.onnx binary
+*.npy binary
+*.npz binary
+*.wandb binary
