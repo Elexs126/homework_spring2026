@@ -62,20 +62,22 @@ class PGAgent(nn.Module):
         """
 
         # step 1: calculate Q values of each (s_t, a_t) point, using rewards (r_0, ..., r_t, ..., r_T)
-        q_values: Sequence[np.ndarray] = self._calculate_q_vals(rewards)
+        q_values_by_traj: Sequence[np.ndarray] = self._calculate_q_vals(rewards)
 
-        # TODO: flatten the lists of arrays into single arrays, so that the rest of the code can be written in a vectorized
-        # way. obs, actions, rewards, terminals, and q_values should all be arrays with a leading dimension of `batch_size`
-        # beyond this point.
+     
+        obs_batch: np.ndarray = np.concatenate(obs, axis=0)
+        actions_batch: np.ndarray = np.concatenate(actions, axis=0)
+        rewards_batch: np.ndarray = np.concatenate(rewards, axis=0)
+        terminals_batch: np.ndarray = np.concatenate(terminals, axis=0)
+        q_values_batch: np.ndarray = np.concatenate(q_values_by_traj, axis=0)
 
         # step 2: calculate advantages from Q values
         advantages: np.ndarray = self._estimate_advantage(
-            obs, rewards, q_values, terminals
+            obs_batch, rewards_batch, q_values_batch, terminals_batch
         )
 
         # step 3: use all datapoints (s_t, a_t, adv_t) to update the PG actor/policy
-        # TODO: update the PG actor/policy network once using the advantages
-        info: dict = None
+        info: dict = self.actor.update(obs_batch, actions_batch, advantages)
 
         # step 4: if needed, use all datapoints (s_t, a_t, q_t) to update the PG critic/baseline
         if self.critic is not None:

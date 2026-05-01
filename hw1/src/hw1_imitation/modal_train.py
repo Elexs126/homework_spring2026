@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 import modal
 
@@ -11,7 +12,23 @@ PROJECT_DIR = "/root/project"
 VOLUME_PATH = "/vol"
 DEFAULT_GPU = "T4"
 DEFAULT_CPU = 2.0
+TORCH_LINUX_CU126 = (
+    "torch @ "
+    "https://download.pytorch.org/whl/cu126/"
+    "torch-2.10.0%2Bcu126-cp311-cp311-manylinux_2_28_x86_64.whl"
+    "#sha256=a9a9ba3b2baf23c044499ffbcbed88e04b6e38b94189c7dc42dd2cfcdd8c55c0"
+)
 volume = modal.Volume.from_name("hw1-imitation-volume", create_if_missing=True)
+
+
+def project_dependencies() -> list[str]:
+    root = Path(__file__).resolve().parents[2]
+    with (root / "pyproject.toml").open("rb") as file:
+        dependencies = tomllib.load(file)["project"]["dependencies"]
+    return [
+        TORCH_LINUX_CU126 if dependency.lower().startswith("torch") else dependency
+        for dependency in dependencies
+    ]
 
 
 def load_gitignore_patterns() -> list[str]:
@@ -39,8 +56,12 @@ def load_gitignore_patterns() -> list[str]:
     return patterns
 
 
-# Build a container image with the project's dependencies using uv.
-image = modal.Image.debian_slim().apt_install("libgl1", "libglib2.0-0").uv_sync()
+# Build a container image with the project's dependencies using uv pip.
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("libgl1", "libglib2.0-0")
+    .uv_pip_install(project_dependencies())
+)
 if NETRC_PATH.is_file():
     image = image.add_local_file(
         NETRC_PATH,

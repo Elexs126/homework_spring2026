@@ -106,9 +106,9 @@ class FlowMatchingPolicy(BasePolicy):
         t  = torch.rand(batch_size, 1, device=state.device)   
         xt = (1 - t)*x0 + t * x1
         model_input = torch.cat([state, xt, t], dim=1)
-        pred_xt = self.MLP(model_input)
+        pred_vt = self.MLP(model_input)
         target_velocity = x1 - x0
-        return nn.functional.mse_loss(pred_xt, target_velocity)
+        return nn.functional.mse_loss(pred_vt, target_velocity)
         
 
     def sample_actions(
